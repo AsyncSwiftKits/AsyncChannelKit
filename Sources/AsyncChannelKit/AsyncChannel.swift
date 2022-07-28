@@ -1,6 +1,9 @@
 import Foundation
 
 public actor AsyncChannel<Element: Sendable> {
+    public enum Failure: Error {
+        case cannotSendAfterTerminated
+    }
     public typealias ChannelContinuation = CheckedContinuation<Element?, Never>
 
     private var continuations: [ChannelContinuation] = []
@@ -12,7 +15,7 @@ public actor AsyncChannel<Element: Sendable> {
     }
 
     private var canTerminate: Bool {
-        terminated && !continuations.isEmpty
+        terminated && elements.isEmpty && !continuations.isEmpty
     }
 
     public init() {
@@ -25,7 +28,10 @@ public actor AsyncChannel<Element: Sendable> {
         }
     }
 
-    public func send(element: Element) {
+    public func send(element: Element) throws {
+        guard !terminated else {
+            throw Failure.cannotSendAfterTerminated
+        }
         elements.append(element)
         processNext()
     }
@@ -39,6 +45,7 @@ public actor AsyncChannel<Element: Sendable> {
         if canTerminate {
             let contination = continuations.removeFirst()
             assert(continuations.isEmpty)
+            assert(elements.isEmpty)
             contination.resume(returning: nil)
             return
         }

@@ -25,6 +25,7 @@ final class AsyncChannelKitTests: XCTestCase {
 
         print("-- before --")
         for try await element in sequence {
+            print(element)
             output.append(element)
         }
         print("-- after --")
@@ -46,6 +47,7 @@ final class AsyncChannelKitTests: XCTestCase {
 
         print("-- before --")
         for try await element in sequence {
+            print(element)
             output.append(element)
         }
         print("-- after --")
@@ -57,7 +59,7 @@ final class AsyncChannelKitTests: XCTestCase {
         var index = 0
         while index < elements.count {
             try await Task.sleep(seconds: sleepSeconds)
-            await channel.send(element: elements[index])
+            try await channel.send(element: elements[index])
             index += 1
         }
         await channel.terminate()

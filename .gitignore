@@ -1,2 +1,3 @@
-.DSStore
+.DS_Store
 .build
+.swiftpm

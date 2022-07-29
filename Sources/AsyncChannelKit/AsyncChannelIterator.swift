@@ -8,6 +8,6 @@ public struct AsyncChannelIterator<Element: Sendable>: AsyncIteratorProtocol {
     }
 
     public mutating func next() async throws -> Element? {
-        await channel.next()
+        try await channel.next()
     }
 }

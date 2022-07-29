@@ -1,29 +1,34 @@
 import Foundation
 
-public actor AsyncChannel<Element: Sendable>: AsyncSequence {
+public actor AsyncThrowingChannel<Element: Sendable, Failure: Error>: AsyncSequence {
     public struct Iterator: AsyncIteratorProtocol, Sendable {
-        private let channel: AsyncChannel<Element>
+        private let channel: AsyncThrowingChannel<Element, Failure>
 
-        public init(_ channel: AsyncChannel<Element>) {
+        public init(_ channel: AsyncThrowingChannel<Element, Failure>) {
             self.channel = channel
         }
 
-        public mutating func next() async -> Element? {
-            await channel.next()
+        public mutating func next() async throws -> Element? {
+            try await channel.next()
         }
     }
 
     public enum InternalFailure: Error {
         case cannotSendAfterTerminated
     }
-    public typealias ChannelContinuation = CheckedContinuation<Element?, Never>
+    public typealias ChannelContinuation = CheckedContinuation<Element?, Error>
 
     private var continuations: [ChannelContinuation] = []
     private var elements: [Element] = []
     private var terminated: Bool = false
+    private var error: Error? = nil
 
     private var hasNext: Bool {
         !continuations.isEmpty && !elements.isEmpty
+    }
+
+    private var canFail: Bool {
+        error != nil && !continuations.isEmpty
     }
 
     private var canTerminate: Bool {
@@ -37,8 +42,8 @@ public actor AsyncChannel<Element: Sendable>: AsyncSequence {
         Iterator(self)
     }
 
-    public func next() async -> Element? {
-        await withCheckedContinuation { (continuation: ChannelContinuation) in
+    public func next() async throws -> Element? {
+        try await withCheckedThrowingContinuation { (continuation: ChannelContinuation) in
             continuations.append(continuation)
             processNext()
         }
@@ -52,12 +57,29 @@ public actor AsyncChannel<Element: Sendable>: AsyncSequence {
         processNext()
     }
 
+
+    public func fail(_ error: Error) where Failure == Error {
+        self.error = error
+        processNext()
+    }
+
     public func finish() {
         terminated = true
         processNext()
     }
 
     private func processNext() {
+        if canFail {
+            let contination = continuations.removeFirst()
+            assert(continuations.isEmpty)
+            assert(elements.isEmpty)
+            assert(error != nil)
+            if let error = error {
+                contination.resume(throwing: error)
+                return
+            }
+        }
+
         if canTerminate {
             let contination = continuations.removeFirst()
             assert(continuations.isEmpty)

@@ -56,6 +56,62 @@ final class AsyncChannelKitTests: XCTestCase {
         XCTAssertEqual(input, output)
     }
 
+    func testSendAfterFinishing() async throws {
+        let input = ["a", "b", "c"]
+        let channel = AsyncChannel<String>()
+
+        // load all strings into the channel with delays
+        Task {
+            try await send(elements: input, channel: channel, sleepSeconds: sleepSeconds)
+            var thrown: Error? = nil
+            do {
+                try await channel.send("z")
+            } catch {
+                thrown = error
+            }
+            XCTAssertNotNil(thrown)
+        }
+
+        var output: [String] = []
+
+        print("-- before --")
+        for await element in channel {
+            print(element)
+            output.append(element)
+        }
+        print("-- after --")
+
+        XCTAssertEqual(input, output)
+    }
+
+    func testSendAfterFinishingThrowing() async throws {
+        let input = ["x", "y", "z"]
+        let channel = AsyncThrowingChannel<String, Error>()
+
+        // load all strings into the channel with delays
+        Task {
+            try await send(elements: input, channel: channel, sleepSeconds: sleepSeconds)
+            var thrown: Error? = nil
+            do {
+                try await channel.send("a")
+            } catch {
+                thrown = error
+            }
+            XCTAssertNotNil(thrown)
+        }
+
+        var output: [String] = []
+
+        print("-- before --")
+        for try await element in channel {
+            print(element)
+            output.append(element)
+        }
+        print("-- after --")
+
+        XCTAssertEqual(input, output)
+    }
+
     func testSucceedingSequence() async throws {
         let input = [3, 7, 14, 21]
         let channel = AsyncThrowingChannel<Int, Error>()

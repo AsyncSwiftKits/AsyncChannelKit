@@ -12,6 +12,14 @@ final class AsyncChannelKitTests: XCTestCase {
     enum Failure: Error {
         case unluckyNumber
     }
+
+    actor Output<Element> {
+        var elements: [Element] = []
+        func append(_ element: Element) {
+            elements.append(element)
+        }
+    }
+
     let sleepSeconds = 0.1
 
     func testNumberSequence() async throws {
@@ -33,6 +41,28 @@ final class AsyncChannelKitTests: XCTestCase {
         print("-- after --")
 
         XCTAssertEqual(input, output)
+    }
+
+    func testNumberSequenceUsingForEach() async throws {
+        let input = [1, 2, 3, 4, 5]
+        let channel = AsyncChannel<Int>()
+
+        // load all numbers into the channel with delays
+        Task {
+            try await send(elements: input, channel: channel, sleepSeconds: sleepSeconds)
+        }
+
+        let output = Output<Int>()
+
+        print("-- before --")
+        await channel.forEach { element in
+            print(element)
+            await output.append(element)
+        }
+        print("-- after --")
+
+        let outputElements = await output.elements
+        XCTAssertEqual(input, outputElements)
     }
 
     func testStringSequence() async throws {

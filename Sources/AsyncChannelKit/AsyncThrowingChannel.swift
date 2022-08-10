@@ -3,37 +3,45 @@ import Foundation
 public actor AsyncThrowingChannel<Element: Sendable, Failure: Error>: AsyncSequence {
     public struct Iterator: AsyncIteratorProtocol, Sendable {
         private let channel: AsyncThrowingChannel<Element, Failure>
+        private var active = true
 
         public init(_ channel: AsyncThrowingChannel<Element, Failure>) {
             self.channel = channel
         }
 
         public mutating func next() async throws -> Element? {
-            try await channel.next()
+            guard active else {
+                return nil
+            }
+            do {
+                let value: Element? = try await withTaskCancellationHandler { [channel] in
+                    Task {
+                        await channel.cancel()
+                    }
+                } operation: {
+                    try await channel.next()
+                }
+
+                if let value = value {
+                    return value
+                } else {
+                    active = false
+                    return nil
+                }
+            } catch {
+                active = false
+                throw error
+            }
         }
     }
 
-    public enum InternalFailure: Error {
-        case cannotSendAfterTerminated
-    }
-    public typealias ChannelContinuation = CheckedContinuation<Element?, Error>
+    typealias NextContinuation = CheckedContinuation<Element?, Error>
+    typealias SendContinuation = CheckedContinuation<Void, Never>
 
-    private var continuations: [ChannelContinuation] = []
     private var elements: [Element] = []
+    private var nexts: [NextContinuation] = []
+    private var sends: [SendContinuation] = []
     private var terminated: Bool = false
-    private var error: Error? = nil
-
-    private var hasNext: Bool {
-        !continuations.isEmpty && !elements.isEmpty
-    }
-
-    private var canFail: Bool {
-        error != nil && !continuations.isEmpty
-    }
-
-    private var canTerminate: Bool {
-        terminated && elements.isEmpty && !continuations.isEmpty
-    }
 
     public init() {
     }
@@ -43,61 +51,76 @@ public actor AsyncThrowingChannel<Element: Sendable, Failure: Error>: AsyncSeque
     }
 
     public func next() async throws -> Element? {
-        try await withCheckedThrowingContinuation { (continuation: ChannelContinuation) in
-            continuations.append(continuation)
+        try await withCheckedThrowingContinuation { (continuation: NextContinuation) in
+            nexts.append(continuation)
             processNext()
         }
     }
 
-    public func send(_ element: Element) throws {
-        guard !terminated else {
-            throw InternalFailure.cannotSendAfterTerminated
+    public func send(_ element: Element) async {
+        await withTaskCancellationHandler {
+            Task {
+                await terminateAll()
+            }
+        } operation: {
+            await withCheckedContinuation { (continuation: SendContinuation) in
+                elements.append(element)
+                sends.append(continuation)
+                processNext()
+            }
         }
-        elements.append(element)
-        processNext()
     }
 
+    func terminateAll(error: Failure? = nil) {
+        terminated = true
+        while !sends.isEmpty {
+            let send = sends.removeFirst()
+            send.resume(returning: ())
+        }
+        while !nexts.isEmpty {
+            let next = nexts.removeFirst()
+            if let error = error {
+                next.resume(throwing: error)
+            } else {
+                next.resume(returning: nil)
+            }
+        }
+    }
 
     public func fail(_ error: Error) where Failure == Error {
-        self.error = error
-        processNext()
+        terminateAll(error: error)
     }
 
     public func finish() {
-        terminated = true
-        processNext()
+        terminateAll()
+    }
+
+    public func cancel() {
+        terminateAll()
     }
 
     private func processNext() {
-        if canFail {
-            let continuation = continuations.removeFirst()
-            assert(continuations.isEmpty)
-            assert(elements.isEmpty)
-            assert(error != nil)
-            if let error = error {
-                continuation.resume(throwing: error)
-                return
-            }
-        }
-
-        if canTerminate {
-            let continuation = continuations.removeFirst()
-            assert(continuations.isEmpty)
-            assert(elements.isEmpty)
-            continuation.resume(returning: nil)
+        if terminated && !nexts.isEmpty {
+            let next = nexts.removeFirst()
+            next.resume(returning: nil)
             return
         }
 
-        guard hasNext else {
+        guard !elements.isEmpty,
+              !sends.isEmpty,
+              !nexts.isEmpty else {
             return
         }
 
-        assert(!continuations.isEmpty)
         assert(!elements.isEmpty)
+        assert(!nexts.isEmpty)
+        assert(!sends.isEmpty)
 
-        let continuation = continuations.removeFirst()
         let element = elements.removeFirst()
+        let send = sends.removeFirst()
+        let next = nexts.removeFirst()
 
-        continuation.resume(returning: element)
+        next.resume(returning: element)
+        send.resume(returning: ())
     }
 }

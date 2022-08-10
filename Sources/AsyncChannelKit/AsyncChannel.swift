@@ -3,32 +3,40 @@ import Foundation
 public actor AsyncChannel<Element: Sendable>: AsyncSequence {
     public struct Iterator: AsyncIteratorProtocol, Sendable {
         private let channel: AsyncChannel<Element>
+        private var active = true
 
         public init(_ channel: AsyncChannel<Element>) {
             self.channel = channel
         }
 
         public mutating func next() async -> Element? {
-            await channel.next()
+            guard active else {
+                return nil
+            }
+            let value: Element? = await withTaskCancellationHandler { [channel] in
+                Task {
+                    await channel.cancel()
+                }
+            } operation: {
+                await channel.next()
+            }
+
+            if let value = value {
+                return value
+            } else {
+                active = false
+                return nil
+            }
         }
     }
 
-    public enum InternalFailure: Error {
-        case cannotSendAfterTerminated
-    }
-    public typealias ChannelContinuation = CheckedContinuation<Element?, Never>
+    typealias NextContinuation = CheckedContinuation<Element?, Never>
+    typealias SendContinuation = CheckedContinuation<Void, Never>
 
-    private var continuations: [ChannelContinuation] = []
     private var elements: [Element] = []
+    private var nexts: [NextContinuation] = []
+    private var sends: [SendContinuation] = []
     private var terminated: Bool = false
-
-    private var hasNext: Bool {
-        !continuations.isEmpty && !elements.isEmpty
-    }
-
-    private var canTerminate: Bool {
-        terminated && elements.isEmpty && !continuations.isEmpty
-    }
 
     public init() {
     }
@@ -38,44 +46,69 @@ public actor AsyncChannel<Element: Sendable>: AsyncSequence {
     }
 
     public func next() async -> Element? {
-        await withCheckedContinuation { (continuation: ChannelContinuation) in
-            continuations.append(continuation)
+        await withCheckedContinuation { (continuation: NextContinuation) in
+            nexts.append(continuation)
             processNext()
         }
     }
 
-    public func send(_ element: Element) throws {
-        guard !terminated else {
-            throw InternalFailure.cannotSendAfterTerminated
+    // send should not continue until there is a matched next or task is cancelled
+    public func send(_ element: Element) async {
+        await withTaskCancellationHandler {
+            Task {
+                await terminateAll()
+            }
+        } operation: {
+            await withCheckedContinuation { (continuation: SendContinuation) in
+                elements.append(element)
+                sends.append(continuation)
+                processNext()
+            }
         }
-        elements.append(element)
-        processNext()
+    }
+
+    private func terminateAll() {
+        terminated = true
+        while !sends.isEmpty {
+            let send = sends.removeFirst()
+            send.resume(returning: ())
+        }
+        while !nexts.isEmpty {
+            let next = nexts.removeFirst()
+            next.resume(returning: nil)
+        }
     }
 
     public func finish() {
-        terminated = true
-        processNext()
+        terminateAll()
+    }
+
+    public func cancel() {
+        terminateAll()
     }
 
     private func processNext() {
-        if canTerminate {
-            let continuation = continuations.removeFirst()
-            assert(continuations.isEmpty)
-            assert(elements.isEmpty)
-            continuation.resume(returning: nil)
+        if terminated && !nexts.isEmpty {
+            let next = nexts.removeFirst()
+            next.resume(returning: nil)
             return
         }
 
-        guard hasNext else {
+        guard !elements.isEmpty,
+              !sends.isEmpty,
+              !nexts.isEmpty else {
             return
         }
 
-        assert(!continuations.isEmpty)
         assert(!elements.isEmpty)
+        assert(!nexts.isEmpty)
+        assert(!sends.isEmpty)
 
-        let continuation = continuations.removeFirst()
         let element = elements.removeFirst()
+        let send = sends.removeFirst()
+        let next = nexts.removeFirst()
 
-        continuation.resume(returning: element)
+        next.resume(returning: element)
+        send.resume(returning: ())
     }
 }

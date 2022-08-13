@@ -157,58 +157,96 @@ final class AsyncChannelKitTests: XCTestCase {
         let channel = AsyncChannel<String>()
         let ready = expectation(description: "ready")
         let task: Task<String?, Never> = Task {
-          var iterator = channel.makeAsyncIterator()
-          ready.fulfill()
-          return await iterator.next()
+            var iterator = channel.makeAsyncIterator()
+            ready.fulfill()
+            return await iterator.next()
         }
-        wait(for: [ready], timeout: 1.0)
+
+        await waitForExpectations(timeout: 0.1)
         task.cancel()
-        let value = await task.value
-        XCTAssertNil(value)
+
+        let done = expectation(description: "done")
+
+        Task {
+            let value = await task.value
+            XCTAssertNil(value)
+            done.fulfill()
+        }
+
+        await waitForExpectations(timeout: 1.0)
     }
 
     func testThrowingChannelCancelled() async throws {
         let channel = AsyncThrowingChannel<String, Error>()
         let ready = expectation(description: "ready")
         let task: Task<String?, Error> = Task {
-          var iterator = channel.makeAsyncIterator()
-          ready.fulfill()
-          return try await iterator.next()
+            var iterator = channel.makeAsyncIterator()
+            ready.fulfill()
+            return try await iterator.next()
         }
-        wait(for: [ready], timeout: 1.0)
+
+        await waitForExpectations(timeout: 0.1)
         task.cancel()
-        let value = try await task.value
-        XCTAssertNil(value)
+
+        let done = expectation(description: "done")
+
+        Task {
+            let value = try await task.value
+            XCTAssertNil(value)
+            done.fulfill()
+        }
+
+        await waitForExpectations(timeout: 1.0)
     }
 
-    func testChannelCancelledOnSend() async {
-      let channel = AsyncChannel<Int>()
-      let notYetDone = expectation(description: "not yet done")
-      notYetDone.isInverted = true
-      let done = expectation(description: "done")
-      let task = Task {
-        await channel.send(1)
-        notYetDone.fulfill()
-        done.fulfill()
-      }
-      wait(for: [notYetDone], timeout: 0.1)
-      task.cancel()
-      wait(for: [done], timeout: 1.0)
+    func testChannelCancelledOnSend() async throws {
+        let channel = AsyncChannel<Int>()
+        let input = "done"
+        let notYetDone = expectation(description: "not yet done")
+        notYetDone.isInverted = true
+        let task: Task<String, Never> = Task {
+            await channel.send(1)
+            notYetDone.fulfill()
+            return input
+        }
+
+        await waitForExpectations(timeout: 0.1)
+        task.cancel()
+
+        let done = expectation(description: "done")
+
+        Task {
+            let output = await task.value
+            XCTAssertEqual(input, output)
+            done.fulfill()
+        }
+
+        await waitForExpectations(timeout: 1.0)
     }
 
-    func testThrowingChannelCancelledOnSend() async {
-      let channel = AsyncThrowingChannel<Int, Error>()
-      let notYetDone = expectation(description: "not yet done")
-      notYetDone.isInverted = true
-      let done = expectation(description: "done")
-      let task = Task {
-        await channel.send(1)
-        notYetDone.fulfill()
-        done.fulfill()
-      }
-      wait(for: [notYetDone], timeout: 0.1)
-      task.cancel()
-      wait(for: [done], timeout: 1.0)
+    func testThrowingChannelCancelledOnSend() async throws {
+        let channel = AsyncThrowingChannel<Int, Error>()
+        let input = "done"
+        let notYetDone = expectation(description: "not yet done")
+        notYetDone.isInverted = true
+        let task: Task<String, Never> = Task {
+            await channel.send(1)
+            notYetDone.fulfill()
+            return input
+        }
+
+        await waitForExpectations(timeout: 0.1)
+        task.cancel()
+
+        let done = expectation(description: "done")
+
+        Task {
+            let output = await task.value
+            XCTAssertEqual(input, output)
+            done.fulfill()
+        }
+
+        await waitForExpectations(timeout: 1.0)
     }
 
     private func send<Element>(elements: [Element], channel: AsyncChannel<Element>, delay: Double = 0.1) async throws {

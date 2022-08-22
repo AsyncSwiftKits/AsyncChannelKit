@@ -80,7 +80,7 @@ final class AsyncChannelKitTests: XCTestCase {
             await received.fulfill()
         }
 
-        try await waitForExpectations([sent, received])
+        await waitForExpectations([sent, received])
     }
 
     func testNumberSequenceUsingForEach() async throws {
@@ -106,7 +106,7 @@ final class AsyncChannelKitTests: XCTestCase {
             await received.fulfill()
         }
 
-        try await waitForExpectations([sent, received])
+        await waitForExpectations([sent, received])
     }
 
     func testStringSequence() async throws {
@@ -131,7 +131,7 @@ final class AsyncChannelKitTests: XCTestCase {
             await received.fulfill()
         }
 
-        try await waitForExpectations([sent, received])
+        await waitForExpectations([sent, received])
     }
 
     func testSucceedingSequence() async throws {
@@ -168,7 +168,7 @@ final class AsyncChannelKitTests: XCTestCase {
             await received.fulfill()
         }
 
-        try await waitForExpectations([sent, received])
+        await waitForExpectations([sent, received])
     }
 
     func testFailingSequence() async throws {
@@ -212,8 +212,8 @@ final class AsyncChannelKitTests: XCTestCase {
             await received.fulfill()
         }
 
-        try await waitForExpectations([sent], timeout: delay * Double(input.count))
-        try await waitForExpectations([failed, received])
+        await waitForExpectations([sent], timeout: delay * Double(input.count))
+        await waitForExpectations([failed, received])
     }
 
     func testChannelCancelled() async throws {
@@ -227,7 +227,7 @@ final class AsyncChannelKitTests: XCTestCase {
             return await iterator.next()
         }
 
-        try await waitForExpectations([ready])
+        await waitForExpectations([ready])
         task.cancel()
 
         Task {
@@ -236,7 +236,7 @@ final class AsyncChannelKitTests: XCTestCase {
             await done.fulfill()
         }
 
-        try await waitForExpectations([done])
+        await waitForExpectations([done])
     }
 
     func testThrowingChannelCancelled() async throws {
@@ -250,7 +250,7 @@ final class AsyncChannelKitTests: XCTestCase {
             return try await iterator.next()
         }
 
-        try await waitForExpectations([ready])
+        await waitForExpectations([ready])
         task.cancel()
 
         Task {
@@ -259,7 +259,7 @@ final class AsyncChannelKitTests: XCTestCase {
             await done.fulfill()
         }
 
-        try await waitForExpectations([done])
+        await waitForExpectations([done])
     }
 
     func testChannelCancelledOnSend() async throws {
@@ -274,9 +274,9 @@ final class AsyncChannelKitTests: XCTestCase {
             await done.fulfill()
         }
 
-        try await waitForExpectations([notYetDone], timeout: delay)
+        await waitForExpectations([notYetDone], timeout: delay)
         task.cancel()
-        try await waitForExpectations([done], timeout: 1.0)
+        await waitForExpectations([done], timeout: 1.0)
     }
 
     func testThrowingChannelCancelledOnSend() async throws {
@@ -291,9 +291,9 @@ final class AsyncChannelKitTests: XCTestCase {
             await done.fulfill()
         }
 
-        try await waitForExpectations([notYetDone], timeout: delay)
+        await waitForExpectations([notYetDone], timeout: delay)
         task.cancel()
-        try await waitForExpectations([done])
+        await waitForExpectations([done])
     }
 
 }

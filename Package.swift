@@ -24,16 +24,18 @@ let package = Package(
             targets: ["AsyncChannelKit"]),
     ],
     dependencies: [
-        .package(url: "https://github.com/brennanMKE/AsyncTesting.git", exact: "0.0.5")
+        .package(url: "https://github.com/brennanMKE/AsyncTesting.git", exact: "0.0.7")
     ],
     targets: [
         .target(
             name: "AsyncChannelKit",
-            dependencies: []),
+            dependencies: [],
+            swiftSettings: nil
+        ),
         .testTarget(
             name: "AsyncChannelKitTests",
             dependencies: ["AsyncChannelKit", "AsyncTesting"],
-            swiftSettings: swiftSettings
+            swiftSettings: nil
         ),
     ]
 )

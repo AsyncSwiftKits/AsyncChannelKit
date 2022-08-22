@@ -5,8 +5,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/brennanMKE/AsyncTesting.git",
       "state" : {
-        "revision" : "b4000363b92d99dea75c7fdd70b1fc9b73298aeb",
-        "version" : "0.0.5"
+        "revision" : "e6536bdf752fa3af5c5560e9ed8babb67fa3e386",
+        "version" : "0.0.6"
       }
     }
   ],

@@ -1,5 +1,7 @@
 # AsyncChannelKit
 
+![CI](https://github.com/brennanMKE/AsyncChannelKit/actions/workflows/ci.yml/badge.svg)
+
 A simple implementation of an async channel for use with [AsyncSequence] and [AsyncIterator] which matches 
 the same interface as [Channel].
 

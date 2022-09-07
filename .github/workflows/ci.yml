@@ -1,0 +1,56 @@
+name: CI
+
+on:
+  push:
+    branches: 
+      - "main"
+    paths:
+      - 'Sources/**'
+      - 'Tests/**'
+      - '.github/workflows/**'
+      - 'Package.swift'
+  pull_request:
+    branches: 
+      - "main"
+    paths:
+      - 'Sources/**'
+      - 'Tests/**'
+      - '.github/workflows/**'
+      - 'Package.swift'
+
+concurrency: 
+  group: ${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: ${{ matrix.command }} on  ${{ matrix.platform }} (xcode ${{ matrix.xcode }}, swift ${{ matrix.swift }})
+    runs-on: macos-12
+    strategy:
+      fail-fast: true
+      matrix:
+        platform:
+          - macOS
+          - watchOS
+          - tvOS
+          - iOS
+        xcode:
+          - ^13
+        swift:
+          - ~5.6
+          - ~5.5
+        command:
+          - test
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+      - name: Xcode build
+        uses: mxcl/xcodebuild@v1
+        with:
+          xcode: ${{ matrix.xcode }}
+          platform: ${{ matrix.platform }}
+          action: ${{ matrix.command }}
+          code-coverage: true
+          warnings-as-errors: true
+          configuration: debug
+          working-directory: "${{ github.workspace }}"
